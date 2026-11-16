@@ -2,7 +2,7 @@
 import os, sys, json, types
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-os.environ.update(MODO_TESTE="1", WHATSAPP_PROVEDOR="zapi", WHATSAPP_NUMERO="5571900000000",
+os.environ.update(MODO_TESTE="1", WHATSAPP_PROVEDOR="zapi", WHATSAPP_NUMERO="5571900000000, 5571900000001",
                   ZAPI_INSTANCIA="x", ZAPI_TOKEN="y")
 
 def anuncio(i, preco, qualif, lat, lng, quartos=5, nome="Casa"):

@@ -10,6 +10,7 @@ import sys
 import time
 from datetime import date, datetime
 from pathlib import Path
+from urllib.parse import quote
 
 import requests
 
@@ -160,8 +161,14 @@ def montar_mensagem(c, queda_de=None):
 
 
 def enviar_whatsapp(texto):
-    provedor = os.environ.get("WHATSAPP_PROVEDOR", "zapi").lower()
-    numero = os.environ["WHATSAPP_NUMERO"]  # ex.: 5571999998888
+    # um ou mais números separados por vírgula, ex.: 557191066900,557187200701
+    for numero in re.split(r"[,\s;]+", os.environ["WHATSAPP_NUMERO"].strip()):
+        if numero:
+            _enviar_para(re.sub(r"\D", "", numero), texto)
+
+
+def _enviar_para(numero, texto):
+    provedor = (os.environ.get("WHATSAPP_PROVEDOR") or "evolution").lower()
 
     if provedor == "zapi":
         url = (f"https://api.z-api.io/instances/{os.environ['ZAPI_INSTANCIA']}"
@@ -169,8 +176,8 @@ def enviar_whatsapp(texto):
         headers = {"Client-Token": os.environ.get("ZAPI_CLIENT_TOKEN", "")}
         corpo = {"phone": numero, "message": texto}
     elif provedor == "evolution":
-        base = os.environ["EVOLUTION_URL"].rstrip("/")
-        url = f"{base}/message/sendText/{os.environ['EVOLUTION_INSTANCIA']}"
+        base = re.sub(r"/manager/?$", "", os.environ["EVOLUTION_URL"].rstrip("/"))
+        url = f"{base}/message/sendText/{quote(os.environ['EVOLUTION_INSTANCIA'], safe='')}"
         headers = {"apikey": os.environ["EVOLUTION_APIKEY"]}
         corpo = {"number": numero, "text": texto}
     else:

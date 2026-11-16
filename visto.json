@@ -1,31 +1,37 @@
 {
  "1147771702597325382": {
   "nome": "I rent a house in Guarajuba",
+  "piscina": true,
   "preco": 8200.0,
   "visto_em": "2026-11-16"
  },
  "1282049447507363750": {
   "nome": "House 5/4 cond private beach",
+  "piscina": true,
   "preco": 6000.0,
   "visto_em": "2026-11-16"
  },
  "1286123965346530112": {
   "nome": "Paris Cris & Val Retreat",
+  "piscina": true,
   "preco": 2760.0,
   "visto_em": "2026-11-16"
  },
  "1321869251378312179": {
   "nome": "House in Praia do Forte",
+  "piscina": true,
   "preco": 15450.0,
   "visto_em": "2026-11-16"
  },
  "1461607079913139550": {
   "nome": "Casa Paradise",
+  "piscina": true,
   "preco": 11200.0,
   "visto_em": "2026-11-16"
  },
  "701393882252793765": {
   "nome": "House 5 suites in Praia do Forte.",
+  "piscina": true,
   "preco": 14800.0,
   "visto_em": "2026-11-16"
  }

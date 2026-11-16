@@ -45,21 +45,42 @@ def _buscar(local, com_piscina, hash_busca=""):
     )
 
 
+_hash = {"valor": ""}
+
+
 def buscar_airbnb(local):
-    """Retorna (todos, ids_com_piscina). Faz duas buscas: sem filtro e com filtro de piscina."""
+    """Retorna os anúncios da área. Se o hash fixo da lib tiver expirado, pega um novo uma vez só."""
     import pyairbnb
 
-    hash_busca = ""
-    for tentativa in range(2):
-        try:
-            todos = _buscar(local, False, hash_busca)
-            com_piscina = _buscar(local, True, hash_busca)
-            return todos, {str(r["room_id"]) for r in com_piscina}
-        except Exception as erro:  # o hash fixo da lib às vezes expira: pega um novo
-            if tentativa == 1:
-                raise
-            print(f"  busca falhou ({erro}); tentando com hash atualizado", file=sys.stderr)
-            hash_busca = pyairbnb.search.fetch_stays_search_hash()
+    try:
+        return _buscar(local, False, _hash["valor"])
+    except Exception as erro:
+        if _hash["valor"]:
+            raise
+        print(f"  hash padrão expirou ({str(erro)[:80]}); buscando hash atualizado", file=sys.stderr)
+        _hash["valor"] = pyairbnb.search.fetch_stays_search_hash()
+        return _buscar(local, False, _hash["valor"])
+
+
+def tem_piscina(rid):
+    """Abre o anúncio e confere a lista de comodidades. True, False ou None (não deu para ver)."""
+    import pyairbnb.details as details
+
+    try:
+        dados, _, _ = details.get(f"https://www.airbnb.com/rooms/{rid}", "en", "")
+    except Exception as erro:
+        print(f"  não consegui abrir {rid}: {erro}", file=sys.stderr)
+        return None
+    grupos = dados.get("amenities") or []
+    if not grupos:
+        return None
+    for grupo in grupos:
+        indisponivel = "not included" in (grupo.get("title") or "").lower()
+        for a in grupo.get("values", []):
+            texto = f"{a.get('title', '')} {a.get('icon', '')}"
+            if PALAVRAS_PISCINA.search(texto) and a.get("available", True) is not False and not indisponivel:
+                return True
+    return False
 
 
 def preco_total(r):
@@ -94,16 +115,15 @@ def coletar():
     for nome, local in config.LOCAIS.items():
         print(f"Buscando {nome}...")
         try:
-            todos, ids_piscina = buscar_airbnb(local)
+            todos = buscar_airbnb(local)
         except Exception as erro:
-            print(f"  ERRO em {nome}: {erro}", file=sys.stderr)
+            print(f"  ERRO em {nome}: {str(erro)[:300]}", file=sys.stderr)
             falhas.append(nome)
             continue
-        print(f"  {len(todos)} anúncios com {config.MIN_QUARTOS}+ quartos, {len(ids_piscina)} com piscina")
+        print(f"  {len(todos)} anúncios com {config.MIN_QUARTOS}+ quartos")
         for r in todos:
             rid = str(r["room_id"])
             if rid in casas:
-                casas[rid]["piscina"] |= rid in ids_piscina
                 continue
             nome_anuncio = r.get("name") or r.get("title") or "Casa"
             n_quartos = quartos(r)
@@ -113,7 +133,7 @@ def coletar():
                 "praia": praia_mais_proxima(r),
                 "preco": preco_total(r),
                 "quartos": n_quartos,
-                "piscina": rid in ids_piscina or bool(PALAVRAS_PISCINA.search(nome_anuncio)),
+                "piscina": None,  # conferido depois, só para as casas que passarem no filtro
                 "nota": r.get("rating", {}).get("value") or None,
                 "avaliacoes": r.get("rating", {}).get("reviewCount") or 0,
                 "link": f"https://www.airbnb.com.br/rooms/{rid}?check_in={config.CHECK_IN}&check_out={config.CHECK_OUT}",
@@ -139,6 +159,14 @@ def brl(v):
     return "R$ " + f"{v:,.0f}".replace(",", ".")
 
 
+def texto_piscina(piscina):
+    if piscina is True:
+        return "🏊 Tem piscina"
+    if piscina is False:
+        return "⚠️ *ATENÇÃO: SEM PISCINA*"
+    return "❓ Não consegui confirmar se tem piscina, veja no anúncio"
+
+
 def montar_mensagem(c, queda_de=None):
     di = datetime.strptime(config.CHECK_IN, "%Y-%m-%d").strftime("%d/%m")
     df = datetime.strptime(config.CHECK_OUT, "%Y-%m-%d").strftime("%d/%m")
@@ -153,7 +181,7 @@ def montar_mensagem(c, queda_de=None):
     if queda_de:
         preco += f"\n   antes: {brl(queda_de)}"
     linhas.append(preco)
-    linhas.append("🏊 Tem piscina" if c["piscina"] else "⚠️ *ATENÇÃO: SEM PISCINA*")
+    linhas.append(texto_piscina(c["piscina"]))
     if c["nota"]:
         linhas.append(f"⭐ {c['nota']} ({c['avaliacoes']} avaliações)")
     linhas.append(c["link"])
@@ -210,6 +238,26 @@ def main():
     casas = filtrar(coletar())
     print(f"{len(casas)} casas dentro do orçamento de {brl(config.PRECO_MAXIMO_TOTAL)}")
 
+    # Piscina: confere no anúncio uma vez por casa e guarda o resultado em visto.json
+    correcoes = []
+    for c in casas:
+        antigo = vistos.get(c["id"])
+        if antigo and antigo.get("piscina") is not None:
+            c["piscina"] = antigo["piscina"]
+            continue
+        c["piscina"] = tem_piscina(c["id"])
+        if c["piscina"] is None and PALAVRAS_PISCINA.search(c["nome"]):
+            c["piscina"] = True
+        # casas avisadas antes desta verificação existir: corrige se não tiver piscina
+        if antigo and "piscina" not in antigo and c["piscina"] is False:
+            correcoes.append(c)
+        if antigo and c["piscina"] is not None:
+            antigo["piscina"] = c["piscina"]
+        time.sleep(1)
+
+    for c in correcoes:
+        enviar_whatsapp(f"⚠️ *CORREÇÃO: esta casa NÃO tem piscina*\n📍 {c['praia']} · {brl(c['preco'])}\n*{c['nome']}*\n{c['link']}")
+
     alertas = []
     for c in casas:
         antigo = vistos.get(c["id"])
@@ -218,20 +266,24 @@ def main():
         elif antigo["preco"] - c["preco"] >= config.AVISAR_QUEDA_DE_PRECO_MINIMA:
             alertas.append((c, antigo["preco"]))
 
+    def registrar(c):
+        vistos.setdefault(c["id"], {"visto_em": date.today().isoformat()})
+        vistos[c["id"]].update(preco=c["preco"], nome=c["nome"], piscina=c["piscina"])
+
     enviados = alertas[: config.MAX_ALERTAS_POR_RODADA]
     restantes = alertas[config.MAX_ALERTAS_POR_RODADA:]
     for c, queda in enviados:
         enviar_whatsapp(montar_mensagem(c, queda))
-        vistos[c["id"]] = {"preco": c["preco"], "nome": c["nome"], "visto_em": date.today().isoformat()}
+        registrar(c)
 
     if restantes:
         resumo = [f"➕ Mais {len(restantes)} casas encontradas (do mais barato para o mais caro):"]
         for c, _ in restantes[:30]:
-            sem = " ⚠️ SEM PISCINA" if not c["piscina"] else ""
+            sem = " ⚠️ SEM PISCINA" if c["piscina"] is False else ""
             resumo.append(f"• {c['praia']} · {brl(c['preco'])}{sem}\n  {c['link']}")
         enviar_whatsapp("\n".join(resumo))
         for c, _ in restantes:
-            vistos[c["id"]] = {"preco": c["preco"], "nome": c["nome"], "visto_em": date.today().isoformat()}
+            registrar(c)
 
     # guarda também o preço atual dos já vistos para detectar quedas futuras
     for c in casas:

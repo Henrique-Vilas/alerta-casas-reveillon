@@ -20,8 +20,16 @@ base = [
     anuncio(5, 12000, "total", -12.625, -38.045, nome="Casa com piscina privativa"),
 ]
 fake = types.ModuleType("pyairbnb")
-fake.search_all = lambda **kw: [a for a in base if not kw["amenities"] or a["room_id"] == 1]
+fake.search_all = lambda **kw: base
+def detalhes(url, lang, proxy):
+    rid = url.rsplit("/", 1)[1]
+    if rid == "5":
+        raise RuntimeError("página fora do ar")  # piscina desconhecida -> usa o título
+    piscina = {"title": "Pool", "icon": "SYSTEM_POOL", "available": rid == "1"}
+    return {"amenities": [{"title": "Outdoor", "values": [piscina, {"title": "Wifi", "available": True}]}]}, {}, {}
+fake.details = types.SimpleNamespace(get=detalhes)
 sys.modules["pyairbnb"] = fake
+sys.modules["pyairbnb.details"] = fake.details
 
 import alerta, config
 alerta.ARQUIVO_VISTOS = Path(os.environ.get("TMPDIR", "/tmp")) / "visto_teste.json"

@@ -1,0 +1,2 @@
+pyairbnb==2.2.2
+requests>=2.31

@@ -1,0 +1,43 @@
+name: Alerta casas Réveillon
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"   # a cada 30 min (o GitHub pode atrasar alguns minutos)
+  workflow_dispatch:          # botão "Run workflow" para rodar na hora
+
+permissions:
+  contents: write             # para salvar visto.json e não repetir alertas
+
+concurrency:
+  group: alerta
+  cancel-in-progress: false
+
+jobs:
+  buscar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Buscar e alertar
+        env:
+          WHATSAPP_PROVEDOR: ${{ vars.WHATSAPP_PROVEDOR }}
+          WHATSAPP_NUMERO: ${{ secrets.WHATSAPP_NUMERO }}
+          ZAPI_INSTANCIA: ${{ secrets.ZAPI_INSTANCIA }}
+          ZAPI_TOKEN: ${{ secrets.ZAPI_TOKEN }}
+          ZAPI_CLIENT_TOKEN: ${{ secrets.ZAPI_CLIENT_TOKEN }}
+          EVOLUTION_URL: ${{ secrets.EVOLUTION_URL }}
+          EVOLUTION_INSTANCIA: ${{ secrets.EVOLUTION_INSTANCIA }}
+          EVOLUTION_APIKEY: ${{ secrets.EVOLUTION_APIKEY }}
+        run: python alerta.py
+      - name: Salvar anúncios já avisados
+        if: always()
+        run: |
+          git config user.name "alerta-bot"
+          git config user.email "alerta-bot@users.noreply.github.com"
+          git add visto.json
+          git diff --cached --quiet || (git commit -m "Atualiza anúncios vistos" && git push)

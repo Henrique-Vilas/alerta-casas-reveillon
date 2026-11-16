@@ -5,7 +5,7 @@ CHECK_OUT = "2027-01-02"
 
 MIN_QUARTOS = 5
 PRECO_MAXIMO_TOTAL = 16_000  # R$ pelo período inteiro (29/12 a 02/01)
-HOSPEDES = 0  # 0 = não informar. Coloque o nº de adultos para o preço refletir o grupo.
+HOSPEDES = 13  # o Airbnb só mostra casas que aceitam esse nº de hóspedes, com o preço para o grupo
 
 # Para de checar depois desta data (não faz sentido alertar depois do check-in)
 PARAR_EM = "2026-12-29"
